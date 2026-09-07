@@ -333,7 +333,7 @@
 
   <section class="kpi-row">
     <div class="kpi-card" id="kpiTotalCard">
-      <p class="kpi-label">Total de OM</p>
+      <p class="kpi-label">Cantidad de OM</p>
       <p class="kpi-value" id="kpiTotal">—</p>
       <p class="kpi-sub" id="kpiTotalSub">&nbsp;</p>
     </div>
@@ -342,15 +342,15 @@
       <p class="kpi-value" id="kpiCerradas">—</p>
       <p class="kpi-sub" id="kpiCerradasSub">&nbsp;</p>
     </div>
-    <div class="kpi-card k-danger" id="kpiVencidasCard">
-      <p class="kpi-label">Vencidas</p>
-      <p class="kpi-value" id="kpiVencidas">—</p>
-      <p class="kpi-sub">Fecha fin pasada y no cerradas</p>
+    <div class="kpi-card" id="kpiLiberadasCard">
+      <p class="kpi-label">Liberadas</p>
+      <p class="kpi-value" id="kpiLiberadas">—</p>
+      <p class="kpi-sub" id="kpiLiberadasSub">&nbsp;</p>
     </div>
-    <div class="kpi-card k-warning" id="kpiSinPlanCard">
-      <p class="kpi-label">Sin plan asignado</p>
-      <p class="kpi-value" id="kpiSinPlan">—</p>
-      <p class="kpi-sub">N° Plan vacío o "S/Plan"</p>
+    <div class="kpi-card k-warning" id="kpiReprogramadasCard">
+      <p class="kpi-label">Reprogramadas</p>
+      <p class="kpi-value" id="kpiReprogramadas">—</p>
+      <p class="kpi-sub" id="kpiReprogramadasSub">&nbsp;</p>
     </div>
   </section>
 
@@ -511,7 +511,13 @@
     return String(estatusRaw || "").trim().split(/\s+/).filter(Boolean);
   }
   function isClosed(estatusRaw){
-    return statusTokens(estatusRaw).includes("CERR");
+    return statusTokens(estatusRaw).includes("CERRADA");
+  }
+  function isLiberada(estatusRaw){
+    return statusTokens(estatusRaw).includes("LIBERADA");
+  }
+  function isReprogramada(estatusRaw){
+    return statusTokens(estatusRaw).includes("REPROGRAMADA");
   }
   function isEmptyPlan(planRaw){
     const p = String(planRaw ?? "").trim();
@@ -645,19 +651,21 @@
 
   // ---------- KPIs ----------
   function renderKPIs(){
-    const today = startOfToday();
     const total = records.length;
     const cerradas = records.filter(r => isClosed(r.estatus)).length;
-    const vencidas = records.filter(r => r.fechaFin && r.fechaFin < today && !isClosed(r.estatus)).length;
-    const sinPlan = records.filter(r => isEmptyPlan(r.nPlan)).length;
+    const liberadas = records.filter(r => isLiberada(r.estatus)).length;
+    const reprogramadas = records.filter(r => isReprogramada(r.estatus)).length;
 
     el("kpiTotal").textContent = total;
     el("kpiCerradas").textContent = cerradas;
-    el("kpiVencidas").textContent = vencidas;
-    el("kpiSinPlan").textContent = sinPlan;
+    el("kpiLiberadas").textContent = liberadas;
+    el("kpiReprogramadas").textContent = reprogramadas;
 
+    const pct = (n) => total ? Math.round((n/total)*100) + "% del total" : "\u00A0";
     el("kpiTotalSub").textContent = total ? "100% de la carga actual" : "\u00A0";
     el("kpiCerradasSub").textContent = total ? Math.round((cerradas/total)*100) + "% de cumplimiento" : "\u00A0";
+    el("kpiLiberadasSub").textContent = pct(liberadas);
+    el("kpiReprogramadasSub").textContent = pct(reprogramadas);
   }
 
   // ---------- Charts ----------
@@ -811,7 +819,7 @@
       const vencida = r.fechaFin && r.fechaFin < today && !isClosed(r.estatus);
       const tokens = statusTokens(r.estatus);
       const chips = tokens.map(t => {
-        const cls = t === "CERR" ? "badge-success" : vencida ? "badge-danger" : "badge-neutral";
+        const cls = t === "CERRADA" ? "badge-success" : vencida ? "badge-danger" : "badge-neutral";
         return `<span class="badge ${cls}">${escapeHtml(t)}</span>`;
       }).join(" ");
       return `<tr>
