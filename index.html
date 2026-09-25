@@ -301,7 +301,41 @@
     text-align:center;
   }
 
+  /* ---------- Seguimiento de equipos clave ---------- */
+  .eq-controls{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:14px;}
+  .seg{display:inline-flex; border:1px solid var(--border-strong); border-radius:var(--radius-sm); overflow:hidden;}
+  .seg button{
+    font-family:inherit; font-size:12.5px; padding:7px 13px; border:none; background:var(--surface-alt);
+    color:var(--text-muted); cursor:pointer; border-right:1px solid var(--border);
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button.on{background:var(--accent); color:#fff; font-weight:600;}
+  .seg button:focus-visible{outline:2px solid var(--accent); outline-offset:-2px;}
+  .eq-controls select{min-width:170px;}
+  .eq-kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px;}
+  .eq-kpi{background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 12px;}
+  .eq-kpi p{margin:0;}
+  .eq-kpi .l{font-size:11.5px; color:var(--text-muted);}
+  .eq-kpi .v{font-size:22px; font-weight:700; font-family:'IBM Plex Mono', monospace; line-height:1.2;}
+  .eq-kpi.ok .v{color:var(--success);} .eq-kpi.warn .v{color:var(--warning);} .eq-kpi.bad .v{color:var(--danger);}
+  .eq-body{display:grid; grid-template-columns:1.6fr 1fr; gap:18px;}
+  .eq-rank h3{font-size:12.5px; font-weight:600; margin:0 0 8px; color:var(--text-muted);}
+  .rank-row{
+    display:grid; grid-template-columns:130px 1fr 34px; gap:8px; align-items:center;
+    width:100%; padding:5px 4px; border:none; border-bottom:1px solid var(--border); background:none;
+    font-family:inherit; font-size:12px; color:var(--text); text-align:left; cursor:pointer;
+  }
+  .rank-row:hover{background:var(--surface-alt);}
+  .rank-row:focus-visible{outline:2px solid var(--accent); outline-offset:-2px;}
+  .rank-row .n{font-family:'IBM Plex Mono', monospace; font-weight:600; text-align:right;}
+  .rank-row .sub{display:block; font-size:10.5px; color:var(--text-faint);}
+  .rank-bar{height:9px; background:var(--neutral-chip); border-radius:3px; overflow:hidden;}
+  .rank-bar span{display:block; height:100%; border-radius:3px;}
+  .eq-note{font-size:11.5px; color:var(--text-faint); margin:10px 0 0;}
+
   @media (max-width:900px){
+    .eq-body{grid-template-columns:1fr;}
+    .eq-kpis{grid-template-columns:repeat(2,1fr);}
     .kpi-row{grid-template-columns:repeat(2,1fr);}
     .grid-2{grid-template-columns:1fr;}
     #sheetUrl{width:100%; max-width:100%;}
@@ -396,6 +430,44 @@
     <div class="chart-box tall"><canvas id="groupChart"></canvas></div>
   </section>
 
+  <section class="panel" id="eqPanel">
+    <h2>Seguimiento de equipos clave</h2>
+    <p class="panel-sub" id="eqSub">Intervenciones por mes según N° de Plan, de enero a la fecha (por fecha de inicio de la OM)</p>
+
+    <div class="eq-controls">
+      <div class="field-group">
+        <label style="font-size:11.5px;color:var(--text-muted);margin-bottom:3px;">Equipo</label>
+        <div class="seg" id="eqTipo" role="group" aria-label="Tipo de equipo">
+          <button type="button" data-t="" class="on">Todos</button>
+          <button type="button" data-t="TC">Turbocompresor</button>
+          <button type="button" data-t="MG">Motogenerador</button>
+          <button type="button" data-t="EC">Electrocompresor</button>
+          <button type="button" data-t="SA">Secadora de aire</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="eqPlanta" style="font-size:11.5px;color:var(--text-muted);margin-bottom:3px;">Planta</label>
+        <select id="eqPlanta"><option value="">Todas las plantas</option></select>
+      </div>
+    </div>
+
+    <div class="eq-kpis">
+      <div class="eq-kpi"><p class="l">Intervenciones</p><p class="v" id="eqTotal">—</p></div>
+      <div class="eq-kpi ok"><p class="l">Cerradas</p><p class="v" id="eqCerradas">—</p></div>
+      <div class="eq-kpi warn"><p class="l">Abiertas</p><p class="v" id="eqAbiertas">—</p></div>
+      <div class="eq-kpi bad"><p class="l">Vencidas</p><p class="v" id="eqVencidas">—</p></div>
+    </div>
+
+    <div class="eq-body">
+      <div class="chart-box"><canvas id="eqChart" role="img" aria-label="Línea de tiempo de intervenciones mensuales de los equipos clave"></canvas></div>
+      <div class="eq-rank">
+        <h3>Equipos con más intervenciones</h3>
+        <div id="eqRank"><p class="alert-empty">Conectá la hoja para ver el ranking.</p></div>
+      </div>
+    </div>
+    <p class="eq-note">Hacé clic en un equipo del ranking para ver sus órdenes en el detalle. Las OM correctivas sin N° de Plan no se incluyen en este seguimiento.</p>
+  </section>
+
   <section class="panel">
     <h2>Alertas</h2>
     <p class="panel-sub">Vencidas, próximas a vencer (≤15 días) y con datos incompletos</p>
@@ -422,6 +494,10 @@
         <select id="fEstatus"><option value="">Todos</option></select>
       </div>
       <div class="field-group">
+        <label for="fEquipo">Equipo</label>
+        <select id="fEquipo"><option value="">Todos</option></select>
+      </div>
+      <div class="field-group">
         <label for="fDesde">Desde</label>
         <input type="date" id="fDesde">
       </div>
@@ -431,7 +507,7 @@
       </div>
       <div class="field-group">
         <label for="searchBox">Buscar</label>
-        <input type="text" id="searchBox" placeholder="N° OM, descripción, responsable…">
+        <input type="text" id="searchBox" placeholder="N° OM, plan, equipo, descripción…">
       </div>
       <button class="btn" id="clearFilters">Limpiar filtros</button>
       <span class="results-count" id="resultsCount"></span>
@@ -451,11 +527,12 @@
             <th data-key="Responsable">Responsable<span class="arrow"></span></th>
             <th data-key="Estatus">Estatus<span class="arrow"></span></th>
             <th data-key="N° Plan">N° Plan<span class="arrow"></span></th>
+            <th data-key="Equipo">Equipo<span class="arrow"></span></th>
             <th data-key="Comentario">Comentario<span class="arrow"></span></th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="11" class="empty-state">Pegá la URL del Web App y presioná Actualizar.</td></tr>
+          <tr><td colspan="12" class="empty-state">Pegá la URL del Web App y presioná Actualizar.</td></tr>
         </tbody>
       </table>
     </div>
@@ -477,6 +554,47 @@
   let isFetching = false;
 
   const STORAGE_KEY = "gpm_dashboard_config";
+
+  // =====================================================================
+  //  PLANES DE SEGUIMIENTO DE EQUIPOS CLAVE
+  //  Para agregar un plan nuevo, copiá una línea y cambiá sus datos.
+  //  tipo: TC = Turbocompresor · MG = Motogenerador
+  //        EC = Electrocompresor · SA = Secadora de aire
+  // =====================================================================
+  const PLANES_SEGUIMIENTO = {
+    // ---- PC Tratayén ----
+    "30988": { tipo: "TC", equipo: "TC1",    planta: "PC Tratayén" },
+    "31411": { tipo: "MG", equipo: "MG1",    planta: "PC Tratayén" },
+    "31412": { tipo: "MG", equipo: "MG2",    planta: "PC Tratayén" },
+    "31414": { tipo: "MG", equipo: "MG AUX", planta: "PC Tratayén" },
+    "31407": { tipo: "EC", equipo: "EC4001", planta: "PC Tratayén" },
+    "31408": { tipo: "EC", equipo: "EC4002", planta: "PC Tratayén" },
+    "31409": { tipo: "EC", equipo: "EC4011", planta: "PC Tratayén" },
+    "31410": { tipo: "EC", equipo: "EC4012", planta: "PC Tratayén" },
+    "31403": { tipo: "SA", equipo: "SA4010", planta: "PC Tratayén" },
+    "31404": { tipo: "SA", equipo: "SA4011", planta: "PC Tratayén" },
+    "31405": { tipo: "SA", equipo: "SA4020", planta: "PC Tratayén" },
+    "31406": { tipo: "SA", equipo: "SA4021", planta: "PC Tratayén" },
+    // ---- PC Salliqueló ----
+    "31289": { tipo: "TC", equipo: "TC1",    planta: "PC Salliqueló" },
+    "32418": { tipo: "MG", equipo: "MG1",    planta: "PC Salliqueló" },
+    "32419": { tipo: "MG", equipo: "MG2",    planta: "PC Salliqueló" },
+    "32755": { tipo: "EC", equipo: "EC4001", planta: "PC Salliqueló" },
+    "32756": { tipo: "EC", equipo: "EC4002", planta: "PC Salliqueló" },
+    "32757": { tipo: "EC", equipo: "EC4003", planta: "PC Salliqueló" },
+    "32758": { tipo: "EC", equipo: "EC4004", planta: "PC Salliqueló" },
+    "32759": { tipo: "SA", equipo: "SA4010", planta: "PC Salliqueló" },
+    "32760": { tipo: "SA", equipo: "SA4011", planta: "PC Salliqueló" },
+    "32761": { tipo: "SA", equipo: "SA4013", planta: "PC Salliqueló" },
+    "32762": { tipo: "SA", equipo: "SA4014", planta: "PC Salliqueló" }
+  };
+
+  const TIPOS_EQUIPO = {
+    TC: { nombre: "Turbocompresor",   color: "#0B4F9E", dash: [] },
+    MG: { nombre: "Motogenerador",    color: "#B87A2E", dash: [6,4] },
+    EC: { nombre: "Electrocompresor", color: "#146C36", dash: [2,3] },
+    SA: { nombre: "Secadora de aire", color: "#6B4FA3", dash: [10,3,2,3] }
+  };
 
   // ---------- DOM refs ----------
   const el = (id) => document.getElementById(id);
@@ -616,8 +734,22 @@
       estatus: row["Estatus"] ?? "",
       nPlan: row["N° Plan"] ?? "",
       comentario: row["Comentario"] ?? "",
-      campoClasif: row["Campo Clasif."] ?? ""
+      campoClasif: row["Campo Clasif."] ?? "",
+      equipo: String(getField(row, "Equipo") ?? "").trim(),
+      seg: PLANES_SEGUIMIENTO[planKey(row["N° Plan"])] || null
     };
+  }
+
+  // Busca un campo tolerando espacios o mayúsculas distintas en el encabezado
+  function getField(row, name){
+    if (name in row) return row[name];
+    const target = name.trim().toLowerCase();
+    const k = Object.keys(row).find(key => String(key).trim().toLowerCase() === target);
+    return k !== undefined ? row[k] : undefined;
+  }
+  // Normaliza el N° de Plan para compararlo con la tabla de seguimiento
+  function planKey(v){
+    return String(v ?? "").trim().replace(/\.0+$/, "").replace(/^0+/, "");
   }
 
   // ---------- Filters ----------
@@ -626,6 +758,7 @@
       grupo: el("fGrupo").value,
       clase: el("fClase").value,
       estatus: el("fEstatus").value,
+      equipo: el("fEquipo").value,
       desde: el("fDesde").value ? new Date(el("fDesde").value) : null,
       hasta: el("fHasta").value ? new Date(el("fHasta").value) : null,
       q: el("searchBox").value.trim().toLowerCase()
@@ -638,10 +771,11 @@
       if (f.grupo && r.grupo !== f.grupo) return false;
       if (f.clase && r.claseOM !== f.clase) return false;
       if (f.estatus && !statusTokens(r.estatus).includes(f.estatus)) return false;
+      if (f.equipo && r.equipo !== f.equipo) return false;
       if (f.desde && r.fechaFin && r.fechaFin < f.desde) return false;
       if (f.hasta && r.fechaInicio && r.fechaInicio > f.hasta) return false;
       if (f.q){
-        const hay = [r.nOM, r.descripcion, r.responsable, r.ubicacion, r.comentario]
+        const hay = [r.nOM, r.descripcion, r.responsable, r.ubicacion, r.comentario, r.nPlan, r.equipo]
           .join(" ").toLowerCase();
         if (!hay.includes(f.q)) return false;
       }
@@ -656,6 +790,9 @@
     fillSelect(el("fGrupo"), grupos, "Todos");
     fillSelect(el("fClase"), clases, "Todas");
     fillSelect(el("fEstatus"), estatuses, "Todos");
+    fillSelect(el("fEquipo"), uniqueSorted(records.map(r => r.equipo)), "Todos");
+    const plantas = uniqueSorted(Object.values(PLANES_SEGUIMIENTO).map(p => p.planta));
+    fillSelect(el("eqPlanta"), plantas, "Todas las plantas");
   }
   function uniqueSorted(arr){
     return Array.from(new Set(arr.filter(v => v !== "" && v !== null && v !== undefined))).sort();
@@ -806,7 +943,7 @@
       "Ubicación Técnica": r=>r.ubicacion, "Fecha Inicio": r=>r.fechaInicio,
       "Fecha Fin": r=>r.fechaFin, "Descripción": r=>r.descripcion,
       "Responsable": r=>r.responsable, "Estatus": r=>r.estatus,
-      "N° Plan": r=>r.nPlan, "Comentario": r=>r.comentario
+      "N° Plan": r=>r.nPlan, "Equipo": r=>r.equipo, "Comentario": r=>r.comentario
     };
     return map[key] || (() => "");
   }
@@ -833,7 +970,7 @@
 
     const tbody = el("tableBody");
     if (!list.length){
-      tbody.innerHTML = `<tr><td colspan="11" class="empty-state"><strong>Sin resultados</strong>Probá ajustar o limpiar los filtros.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><strong>Sin resultados</strong>Probá ajustar o limpiar los filtros.</td></tr>`;
       return;
     }
 
@@ -856,13 +993,121 @@
         <td>${escapeHtml(r.responsable)}</td>
         <td><div class="status-chip-row">${chips}</div></td>
         <td class="col-plan">${escapeHtml(r.nPlan)}</td>
+        <td class="col-plan">${escapeHtml(r.equipo)}</td>
         <td class="desc-cell">${escapeHtml(r.comentario)}</td>
       </tr>`;
     }).join("");
   }
 
+  // ---------- Seguimiento de equipos clave ----------
+  let eqChartInst;
+  let eqTipoSel = "";
+  const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const EQ_PALETTE = ["#0B4F9E","#146C36","#B87A2E","#6B4FA3","#3D7DB8","#4E9265","#8A4B00","#A31E24"];
+
+  function renderEquiposClave(){
+    const today = startOfToday();
+    const year = today.getFullYear();
+    const lastMonth = today.getMonth();
+    const labels = MESES.slice(0, lastMonth + 1);
+    const planta = el("eqPlanta").value;
+
+    const list = records.filter(r => {
+      if (!r.seg || !r.fechaInicio) return false;
+      if (r.fechaInicio.getFullYear() !== year || r.fechaInicio > today) return false;
+      if (eqTipoSel && r.seg.tipo !== eqTipoSel) return false;
+      if (planta && r.seg.planta !== planta) return false;
+      return true;
+    });
+
+    const cerradas = list.filter(r => isClosed(r.estatus)).length;
+    const vencidas = list.filter(r => !isClosed(r.estatus) && r.fechaFin && r.fechaFin < today).length;
+    el("eqTotal").textContent = list.length;
+    el("eqCerradas").textContent = cerradas;
+    el("eqAbiertas").textContent = list.length - cerradas;
+    el("eqVencidas").textContent = vencidas;
+
+    const titulo = eqTipoSel ? TIPOS_EQUIPO[eqTipoSel].nombre : "equipos clave";
+    el("eqSub").textContent = "Intervenciones por mes de " + titulo.toLowerCase() + (planta ? " en " + planta : "") +
+      ", de enero a la fecha " + year + " (por fecha de inicio de la OM, identificadas por N° de Plan)";
+
+    // Series: por tipo (vista general) o por equipo individual (tipo elegido)
+    const series = {};
+    const addTo = (key, meta, r) => {
+      if (!series[key]) series[key] = { meta, data: new Array(labels.length).fill(0) };
+      series[key].data[r.fechaInicio.getMonth()]++;
+    };
+    if (!eqTipoSel){
+      Object.keys(TIPOS_EQUIPO).forEach(t => series[t] = { meta: { label: TIPOS_EQUIPO[t].nombre, color: TIPOS_EQUIPO[t].color, dash: TIPOS_EQUIPO[t].dash }, data: new Array(labels.length).fill(0) });
+      list.forEach(r => series[r.seg.tipo].data[r.fechaInicio.getMonth()]++);
+    } else {
+      const equipos = Object.entries(PLANES_SEGUIMIENTO)
+        .filter(([,p]) => p.tipo === eqTipoSel && (!planta || p.planta === planta))
+        .sort((a,b) => (a[1].planta + a[1].equipo).localeCompare(b[1].planta + b[1].equipo));
+      const plantasOrden = uniqueSorted(equipos.map(([,p]) => p.planta));
+      equipos.forEach(([plan, p], i) => {
+        const k = p.planta + "|" + p.equipo;
+        if (!series[k]) series[k] = { meta: {
+          label: p.equipo + " · " + p.planta.replace("PC ", ""),
+          color: EQ_PALETTE[i % EQ_PALETTE.length],
+          dash: plantasOrden.indexOf(p.planta) === 0 ? [] : [6,4]
+        }, data: new Array(labels.length).fill(0) };
+      });
+      list.forEach(r => { const k = r.seg.planta + "|" + r.seg.equipo; if (series[k]) series[k].data[r.fechaInicio.getMonth()]++; });
+    }
+
+    const datasets = Object.values(series).map(s => ({
+      label: s.meta.label, data: s.data, borderColor: s.meta.color, backgroundColor: s.meta.color,
+      borderDash: s.meta.dash, borderWidth: 2, pointRadius: 3.5, pointHoverRadius: 5,
+      pointBorderColor: "#fff", pointBorderWidth: 1.5, cubicInterpolationMode: "monotone", fill: false
+    }));
+
+    if (eqChartInst) eqChartInst.destroy();
+    eqChartInst = new Chart(el("eqChart"), {
+      type: "line",
+      data: { labels, datasets },
+      options: {
+        maintainAspectRatio:false,
+        interaction:{ mode:"index", intersect:false },
+        plugins:{ legend:{ position:"bottom", labels:{ boxWidth:22, boxHeight:2, font:{size:11}, color:"#141B24" } } },
+        scales:{
+          x:{ grid:{ display:false }, ticks:{ color:"#5B6474", font:{size:11.5}, autoSkip:false } },
+          y:{ beginAtZero:true, ticks:{ color:"#5B6474", font:{size:11.5}, precision:0 }, grid:{ color:"#E9ECEF" },
+              title:{ display:true, text:"Intervenciones", color:"#5B6474", font:{size:11} } }
+        }
+      }
+    });
+
+    // Ranking por equipo individual
+    const rank = {};
+    list.forEach(r => {
+      const k = r.seg.planta + "|" + r.seg.equipo;
+      if (!rank[k]) rank[k] = { equipo: r.seg.equipo, planta: r.seg.planta, tipo: r.seg.tipo, planes: new Set(), n: 0 };
+      rank[k].n++; rank[k].planes.add(planKey(r.nPlan));
+    });
+    const top = Object.values(rank).sort((a,b) => b.n - a.n).slice(0, 8);
+    const wrap = el("eqRank");
+    if (!top.length){
+      wrap.innerHTML = `<p class="alert-empty">Sin intervenciones registradas para esta selección.</p>`;
+      return;
+    }
+    const max = top[0].n;
+    wrap.innerHTML = top.map(t => `
+      <button type="button" class="rank-row" data-plan="${escapeAttr([...t.planes][0])}" title="Ver órdenes del plan en el detalle">
+        <span>${escapeHtml(t.equipo)}<span class="sub">${escapeHtml(t.planta)}</span></span>
+        <span class="rank-bar"><span style="width:${Math.round(t.n / max * 100)}%;background:${TIPOS_EQUIPO[t.tipo].color}"></span></span>
+        <span class="n">${t.n}</span>
+      </button>`).join("");
+    wrap.querySelectorAll(".rank-row").forEach(b => b.addEventListener("click", () => {
+      el("searchBox").value = b.getAttribute("data-plan");
+      renderTable();
+      el("omTable").scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
+  }
+
   function renderAll(){
     renderKPIs();
+    renderEquiposClave();
     renderStatusChart();
     renderGroupChart();
     renderMaintTypeChart();
@@ -882,10 +1127,17 @@
   });
 
   // ---------- Filter listeners ----------
-  ["fGrupo","fClase","fEstatus","fDesde","fHasta"].forEach(id => el(id).addEventListener("change", renderTable));
+  ["fGrupo","fClase","fEstatus","fEquipo","fDesde","fHasta"].forEach(id => el(id).addEventListener("change", renderTable));
+  document.querySelectorAll("#eqTipo button").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("#eqTipo button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    eqTipoSel = b.getAttribute("data-t");
+    if (records.length) renderEquiposClave();
+  }));
+  el("eqPlanta").addEventListener("change", () => { if (records.length) renderEquiposClave(); });
   el("searchBox").addEventListener("input", renderTable);
   el("clearFilters").addEventListener("click", () => {
-    ["fGrupo","fClase","fEstatus"].forEach(id => el(id).value = "");
+    ["fGrupo","fClase","fEstatus","fEquipo"].forEach(id => el(id).value = "");
     el("fDesde").value = ""; el("fHasta").value = ""; el("searchBox").value = "";
     renderTable();
   });
