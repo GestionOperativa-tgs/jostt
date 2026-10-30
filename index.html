@@ -419,7 +419,7 @@
     </div>
     <div class="panel">
       <h2>Tipo de mantenimiento</h2>
-      <p class="panel-sub">Correctivo (S/Plan · PM08, PM09, PM16) · Preventivo (PM03, PM04, PM10, PM18) · Predictivo (PM13, PM14)</p>
+      <p class="panel-sub">Correctivo (OM sin N° de plan o clase PM08, PM09, PM16) · Preventivo (PM03, PM04, PM10, PM18 con plan) · Predictivo (PM13, PM14 con plan)</p>
       <div class="chart-box"><canvas id="maintTypeChart"></canvas></div>
     </div>
   </section>
@@ -737,6 +737,8 @@
 
   function classifyMaintenance(r){
     const clase = String(r.claseOM ?? "").trim().toUpperCase();
+    // Sin N° de plan = mantenimiento correctivo (registrado manualmente, no hay planificación que lo genere)
+    if (isEmptyPlan(r.nPlan)) return "Correctivo";
     if (PREVENTIVE_CLASSES.includes(clase)) return "Preventivo";
     if (PREDICTIVE_CLASSES.includes(clase)) return "Predictivo";
     if (CORRECTIVE_CLASSES.includes(clase) || isSPlan(r.nPlan)) return "Correctivo";
