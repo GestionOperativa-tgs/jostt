@@ -400,7 +400,7 @@
       <p class="kpi-sub" id="kpiCerradasSub">&nbsp;</p>
     </div>
     <div class="kpi-card" id="kpiLiberadasCard">
-      <p class="kpi-label">Liberadas</p>
+      <p class="kpi-label">Pendientes</p>
       <p class="kpi-value" id="kpiLiberadas">—</p>
       <p class="kpi-sub" id="kpiLiberadasSub">&nbsp;</p>
     </div>
@@ -414,7 +414,7 @@
   <section class="grid-2">
     <div class="panel">
       <h2>Distribución por estatus</h2>
-      <p class="panel-sub">Cuenta cada código de estatus presente en la OM (una OM puede aportar a más de un código)</p>
+      <p class="panel-sub">Estatus SAP normalizado: CERR/CTEC = cerrada · LIB = pendiente · ABIE del mes = pendiente · ABIE de meses anteriores = reprogramada. Se excluyen NEJE y BLOQ.</p>
       <div class="chart-box"><canvas id="statusChart"></canvas></div>
     </div>
     <div class="panel">
@@ -422,6 +422,12 @@
       <p class="panel-sub">Correctivo (S/Plan · PM08, PM09, PM16) · Preventivo (PM03, PM04, PM10, PM18) · Predictivo (PM13, PM14)</p>
       <div class="chart-box"><canvas id="maintTypeChart"></canvas></div>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2>OM por tema</h2>
+    <p class="panel-sub">Tema asignado cruzando el N° de Plan de cada OM con la pestaña Planes. Tocá una barra para filtrar la tabla.</p>
+    <div class="chart-box" id="temaBox"><canvas id="temaChart"></canvas></div>
   </section>
 
   <section class="panel">
@@ -494,6 +500,10 @@
         <select id="fEstatus"><option value="">Todos</option></select>
       </div>
       <div class="field-group">
+        <label for="fTema">Tema</label>
+        <select id="fTema"><option value="">Todos</option></select>
+      </div>
+      <div class="field-group">
         <label for="fEquipo">Equipo</label>
         <select id="fEquipo"><option value="">Todos</option></select>
       </div>
@@ -527,12 +537,13 @@
             <th data-key="Responsable">Responsable<span class="arrow"></span></th>
             <th data-key="Estatus">Estatus<span class="arrow"></span></th>
             <th data-key="N° Plan">N° Plan<span class="arrow"></span></th>
+            <th data-key="Tema">Tema<span class="arrow"></span></th>
             <th data-key="Equipo">Equipo<span class="arrow"></span></th>
             <th data-key="Comentario">Comentario<span class="arrow"></span></th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="12" class="empty-state">Pegá la URL del Web App y presioná Actualizar.</td></tr>
+          <tr><td colspan="13" class="empty-state">Pegá la URL del Web App y presioná Actualizar.</td></tr>
         </tbody>
       </table>
     </div>
@@ -633,12 +644,11 @@
     if (val === null || val === undefined || val === "") return null;
     if (val instanceof Date) return isNaN(val) ? null : val;
     if (typeof val === "number") { const d = new Date(val); return isNaN(d) ? null : d; }
-    // strings: ISO from Apps Script, or DD.MM.AAAA as fallback
-    const iso = new Date(val);
-    if (!isNaN(iso)) return iso;
-    const m = String(val).match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+    // strings: primero DD.MM.AAAA (formato SAP), después ISO del Apps Script
+    const m = String(val).trim().match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
     if (m) return new Date(+m[3], +m[2]-1, +m[1]);
-    return null;
+    const iso = new Date(val);
+    return isNaN(iso) ? null : iso;
   }
   function fmtDate(d){
     if (!d) return "—";
@@ -654,8 +664,60 @@
   function isClosed(estatusRaw){
     return statusTokens(estatusRaw).includes("CERRADA");
   }
-  function isLiberada(estatusRaw){
-    return statusTokens(estatusRaw).includes("LIBERADA");
+  function isPendiente(estatusRaw){
+    return statusTokens(estatusRaw).includes("PENDIENTE");
+  }
+
+  // ---------- Reglas de estatus SAP (revisión oct-2026) ----------
+  //  1) Contiene NEJE o BLOQ            -> se excluye del tablero
+  //  2) Empieza con CTEC o CERR         -> CERRADA
+  //  3) Empieza con ABIE: inicio en un mes anterior al de referencia -> REPROGRAMADA
+  //                       inicio en el mes de referencia o posterior  -> PENDIENTE
+  //  4) Empieza con LIB                 -> PENDIENTE
+  //  Compatibilidad: valores ya normalizados a mano (CERRADA, LIBERADA, ABIERTA, REPROGRAMADA)
+  function clasificarEstatus(estatusRaw, fechaInicio, ref){
+    const t = String(estatusRaw || "").trim().toUpperCase().split(/\s+/).filter(Boolean);
+    if (!t.length) return "SIN ESTATUS";
+    if (t.includes("NEJE") || t.includes("BLOQ")) return "EXCLUIR";
+    const k = t[0];
+    if (k === "CERRADA" || k.startsWith("CTEC") || k.startsWith("CERR")) return "CERRADA";
+    if (k === "REPROGRAMADA") return "REPROGRAMADA";
+    if (k === "LIBERADA" || k === "ABIERTA" || k === "PENDIENTE" || k.startsWith("LIB")) return "PENDIENTE";
+    if (k.startsWith("ABIE")){
+      if (!fechaInicio) return "PENDIENTE";
+      const mi = fechaInicio.getFullYear() * 12 + fechaInicio.getMonth();
+      const mr = ref.getFullYear() * 12 + ref.getMonth();
+      return mi < mr ? "REPROGRAMADA" : "PENDIENTE";
+    }
+    return "OTRO";
+  }
+  let excluidas = 0;   // OM con NEJE / BLOQ que no se muestran
+
+  // ---------- Temas por N° de Plan ----------
+  //  La pestaña Planes (ex "Planes Act") se lee con la Web App del tablero de cumplimiento,
+  //  que ya devuelve { om, planes }. Así no hace falta tocar el Apps Script de este tablero.
+  const PLANES_URL = "https://script.google.com/macros/s/AKfycbyADJ8Ik5lpVz24LZArEnbeKxc3vVftArrwSo5GAEf0AjjtrgL4Wrf9KOF6TQYixdsbkA/exec";
+  const TEMA_SIN_PLAN = "Correctivo (sin plan)";
+  const TEMA_SIN_LISTADO = "Plan fuera del listado";
+  let temaPorPlan = {};
+  let temasCargados = false;
+  async function cargarTemas(){
+    try{
+      const res = await fetch(PLANES_URL, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const d = await res.json();
+      const map = {};
+      (d.planes || []).forEach(row => {
+        const p = planKey(getField(row, "N° Plan"));
+        const t = String(getField(row, "Tema") ?? "").trim();
+        if (p && t && !map[p]) map[p] = t;
+      });
+      temaPorPlan = map; temasCargados = Object.keys(map).length > 0;
+    }catch(e){ console.warn("No se pudieron leer los temas:", e); temasCargados = false; }
+  }
+  function temaDe(nPlan){
+    if (isEmptyPlan(nPlan)) return TEMA_SIN_PLAN;
+    return temaPorPlan[planKey(nPlan)] || (temasCargados ? TEMA_SIN_LISTADO : "Sin tema");
   }
   function isReprogramada(estatusRaw){
     return statusTokens(estatusRaw).includes("REPROGRAMADA");
@@ -701,13 +763,16 @@
       if (!Array.isArray(data)) throw new Error("La respuesta no es una lista de filas (JSON esperado: array de objetos).");
 
       rawRows = data;
-      records = data.map(normalizeRow);
+      await cargarTemas();
+      const todas = data.map(normalizeRow);
+      records = todas.filter(r => r.estatus !== "EXCLUIR");
+      excluidas = todas.length - records.length;
 
       populateFilterOptions();
       renderAll();
 
       const now = new Date();
-      setStatus("live", "Conectado — última actualización " + now.toLocaleTimeString("es-AR") + " · " + records.length + " OM cargadas");
+      setStatus("live", "Conectado — última actualización " + now.toLocaleTimeString("es-AR") + " · " + records.length + " OM cargadas" + (excluidas ? " · " + excluidas + " excluidas (NEJE/BLOQ)" : ""));
       saveConfig();
     }catch(err){
       console.error(err);
@@ -731,12 +796,14 @@
       fechaFin: ff,
       descripcion: row["Descripción"] ?? "",
       responsable: row["Responsable"] ?? "",
-      estatus: row["Estatus"] ?? "",
+      estatusSAP: String(row["Estatus"] ?? "").trim(),
+      estatus: clasificarEstatus(row["Estatus"], fi, startOfToday()),
       nPlan: row["N° Plan"] ?? "",
       comentario: row["Comentario"] ?? "",
       campoClasif: row["Campo Clasif."] ?? "",
       equipo: String(getField(row, "Equipo") ?? "").trim(),
-      seg: PLANES_SEGUIMIENTO[planKey(row["N° Plan"])] || null
+      seg: PLANES_SEGUIMIENTO[planKey(row["N° Plan"])] || null,
+      tema: temaDe(row["N° Plan"])
     };
   }
 
@@ -759,6 +826,7 @@
       clase: el("fClase").value,
       estatus: el("fEstatus").value,
       equipo: el("fEquipo").value,
+      tema: el("fTema").value,
       desde: el("fDesde").value ? new Date(el("fDesde").value) : null,
       hasta: el("fHasta").value ? new Date(el("fHasta").value) : null,
       q: el("searchBox").value.trim().toLowerCase()
@@ -772,10 +840,11 @@
       if (f.clase && r.claseOM !== f.clase) return false;
       if (f.estatus && !statusTokens(r.estatus).includes(f.estatus)) return false;
       if (f.equipo && r.equipo !== f.equipo) return false;
+      if (f.tema && r.tema !== f.tema) return false;
       if (f.desde && r.fechaFin && r.fechaFin < f.desde) return false;
       if (f.hasta && r.fechaInicio && r.fechaInicio > f.hasta) return false;
       if (f.q){
-        const hay = [r.nOM, r.descripcion, r.responsable, r.ubicacion, r.comentario, r.nPlan, r.equipo]
+        const hay = [r.nOM, r.descripcion, r.responsable, r.ubicacion, r.comentario, r.nPlan, r.equipo, r.tema]
           .join(" ").toLowerCase();
         if (!hay.includes(f.q)) return false;
       }
@@ -791,6 +860,7 @@
     fillSelect(el("fClase"), clases, "Todas");
     fillSelect(el("fEstatus"), estatuses, "Todos");
     fillSelect(el("fEquipo"), uniqueSorted(records.map(r => r.equipo)), "Todos");
+    fillSelect(el("fTema"), uniqueSorted(records.map(r => r.tema)), "Todos");
     const plantas = uniqueSorted(Object.values(PLANES_SEGUIMIENTO).map(p => p.planta));
     fillSelect(el("eqPlanta"), plantas, "Todas las plantas");
   }
@@ -813,7 +883,7 @@
   function renderKPIs(){
     const total = records.length;
     const cerradas = records.filter(r => isClosed(r.estatus)).length;
-    const liberadas = records.filter(r => isLiberada(r.estatus)).length;
+    const liberadas = records.filter(r => isPendiente(r.estatus)).length;
     const reprogramadas = records.filter(r => isReprogramada(r.estatus)).length;
 
     el("kpiTotal").textContent = total;
@@ -831,22 +901,57 @@
   // ---------- Charts ----------
   let statusChartInst, groupChartInst, maintTypeChartInst;
 
+  const STATUS_COLORS = { "CERRADA":"#0B4F9E", "PENDIENTE":"#B87A2E", "REPROGRAMADA":"#A31E24", "OTRO":"#8992A0", "SIN ESTATUS":"#C9CED6" };
+
+  // Porcentaje de cada porción: en la leyenda, en el tooltip y sobre la dona (si la porción es >= 4 %)
+  const pctDe = (v, arr) => { const t = arr.reduce((a,b)=>a+b,0); return t ? (v/t*100) : 0; };
+  const fmtPct = (x) => x.toFixed(x >= 10 || x === 0 ? 0 : 1).replace(".", ",") + " %";
+  const donutPctPlugin = {
+    id: "donutPct",
+    afterDatasetsDraw(chart){
+      const ds = chart.data.datasets[0]; if (!ds) return;
+      const meta = chart.getDatasetMeta(0), ctx = chart.ctx;
+      ctx.save();
+      ctx.font = "600 11.5px 'IBM Plex Sans', sans-serif"; ctx.fillStyle = "#fff";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      meta.data.forEach((arc, i) => {
+        if (meta.data[i].hidden || !chart.getDataVisibility(i)) return;
+        const p = pctDe(ds.data[i], ds.data); if (p < 4) return;
+        const pos = arc.tooltipPosition();
+        ctx.fillText(fmtPct(p), pos.x, pos.y);
+      });
+      ctx.restore();
+    }
+  };
+  function donutOptions(){
+    return {
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:"right", labels:{ boxWidth:12, font:{size:11.5}, color:"#141B24",
+          generateLabels(chart){
+            const base = Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart);
+            const d = chart.data.datasets[0].data;
+            return base.map(l => Object.assign(l, { text: `${l.text}  ${d[l.index]} (${fmtPct(pctDe(d[l.index], d))})` }));
+          } } },
+        tooltip:{ callbacks:{ label(c){ return ` ${c.label}: ${c.parsed} OM · ${fmtPct(pctDe(c.parsed, c.dataset.data))}`; } } }
+      }
+    };
+  }
+
   const PALETTE = ["#0B4F9E","#146C36","#8A4B00","#A31E24","#5B6474","#3D7DB8","#4E9265","#B87A2E","#C25158","#8992A0"];
 
   function renderStatusChart(){
     const counts = {};
-    records.forEach(r => statusTokens(r.estatus).forEach(tok => counts[tok] = (counts[tok]||0)+1));
+    records.forEach(r => { counts[r.estatus] = (counts[r.estatus]||0)+1; });
     const labels = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
     const data = labels.map(l => counts[l]);
 
     if (statusChartInst) statusChartInst.destroy();
     statusChartInst = new Chart(el("statusChart"), {
       type: "doughnut",
-      data: { labels, datasets: [{ data, backgroundColor: labels.map((_,i)=>PALETTE[i % PALETTE.length]), borderColor:"#fff", borderWidth:2 }] },
-      options: {
-        maintainAspectRatio:false,
-        plugins:{ legend:{ position:"right", labels:{ boxWidth:12, font:{size:11.5}, color:"#141B24" } } }
-      }
+      data: { labels, datasets: [{ data, backgroundColor: labels.map((l,i)=>STATUS_COLORS[l] || PALETTE[i % PALETTE.length]), borderColor:"#fff", borderWidth:2 }] },
+      options: donutOptions(),
+      plugins: [donutPctPlugin]
     });
   }
 
@@ -891,10 +996,8 @@
     maintTypeChartInst = new Chart(el("maintTypeChart"), {
       type: "doughnut",
       data: { labels, datasets: [{ data, backgroundColor: colors, borderColor:"#fff", borderWidth:2 }] },
-      options: {
-        maintainAspectRatio:false,
-        plugins:{ legend:{ position:"right", labels:{ boxWidth:12, font:{size:11.5}, color:"#141B24" } } }
-      }
+      options: donutOptions(),
+      plugins: [donutPctPlugin]
     });
   }
 
@@ -943,7 +1046,7 @@
       "Ubicación Técnica": r=>r.ubicacion, "Fecha Inicio": r=>r.fechaInicio,
       "Fecha Fin": r=>r.fechaFin, "Descripción": r=>r.descripcion,
       "Responsable": r=>r.responsable, "Estatus": r=>r.estatus,
-      "N° Plan": r=>r.nPlan, "Equipo": r=>r.equipo, "Comentario": r=>r.comentario
+      "N° Plan": r=>r.nPlan, "Tema": r=>r.tema, "Equipo": r=>r.equipo, "Comentario": r=>r.comentario
     };
     return map[key] || (() => "");
   }
@@ -970,7 +1073,7 @@
 
     const tbody = el("tableBody");
     if (!list.length){
-      tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><strong>Sin resultados</strong>Probá ajustar o limpiar los filtros.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="empty-state"><strong>Sin resultados</strong>Probá ajustar o limpiar los filtros.</td></tr>`;
       return;
     }
 
@@ -979,9 +1082,9 @@
       const vencida = r.fechaFin && r.fechaFin < today && !isClosed(r.estatus);
       const tokens = statusTokens(r.estatus);
       const chips = tokens.map(t => {
-        const cls = t === "CERRADA" ? "badge-success" : vencida ? "badge-danger" : "badge-neutral";
-        return `<span class="badge ${cls}">${escapeHtml(t)}</span>`;
-      }).join(" ");
+        const cls = t === "CERRADA" ? "badge-success" : (vencida || t === "REPROGRAMADA") ? "badge-danger" : "badge-neutral";
+        return `<span class="badge ${cls}" title="SAP: ${escapeAttr(r.estatusSAP)}">${escapeHtml(t)}</span>`;
+      }).join(" ") + (r.estatusSAP && r.estatusSAP !== r.estatus ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;font-family:'IBM Plex Mono',monospace">${escapeHtml(r.estatusSAP)}</div>` : "");
       return `<tr>
         <td>${escapeHtml(r.grupo)}</td>
         <td class="col-om">${escapeHtml(r.nOM)}</td>
@@ -993,6 +1096,7 @@
         <td>${escapeHtml(r.responsable)}</td>
         <td><div class="status-chip-row">${chips}</div></td>
         <td class="col-plan">${escapeHtml(r.nPlan)}</td>
+        <td>${escapeHtml(r.tema)}</td>
         <td class="col-plan">${escapeHtml(r.equipo)}</td>
         <td class="desc-cell">${escapeHtml(r.comentario)}</td>
       </tr>`;
@@ -1105,8 +1209,51 @@
     }));
   }
 
+  let temaChartInst;
+  function renderTemaChart(){
+    const est = ["CERRADA","PENDIENTE","REPROGRAMADA"];
+    const by = {};
+    records.forEach(r => {
+      const t = r.tema || "Sin tema";
+      const o = by[t] || (by[t] = { CERRADA:0, PENDIENTE:0, REPROGRAMADA:0, OTRO:0, tot:0 });
+      o[est.includes(r.estatus) ? r.estatus : "OTRO"]++; o.tot++;
+    });
+    const labels = Object.keys(by).sort((a,b) => by[b].tot - by[a].tot);
+    el("temaBox").style.height = Math.max(260, labels.length * 30 + 70) + "px";
+    const ds = est.concat(by && labels.some(l => by[l].OTRO) ? ["OTRO"] : []).map(k => ({
+      label: k.charAt(0) + k.slice(1).toLowerCase() + (k === "CERRADA" || k === "REPROGRAMADA" || k === "PENDIENTE" ? "s" : ""),
+      data: labels.map(l => by[l][k]), backgroundColor: STATUS_COLORS[k], stack: "s", borderRadius: 2, maxBarThickness: 22
+    }));
+    if (temaChartInst) temaChartInst.destroy();
+    temaChartInst = new Chart(el("temaChart"), {
+      type: "bar",
+      data: { labels, datasets: ds },
+      options: {
+        indexAxis: "y", maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
+          tooltip: { callbacks: {
+            label(c){ const t = by[c.label].tot; return ` ${c.dataset.label}: ${c.parsed.x} de ${t} OM (${fmtPct(t ? c.parsed.x / t * 100 : 0)})`; },
+            footer(items){ const t = by[items[0].label].tot; return `Total del tema: ${t} OM · ${fmtPct(t / records.length * 100)} de todas`; }
+          } }
+        },
+        scales: {
+          x: { stacked: true, beginAtZero: true, ticks: { precision: 0, color: "#5B6474" }, grid: { color: "#E9ECEF" } },
+          y: { stacked: true, grid: { display: false }, ticks: { color: "#141B24", font: { size: 11.5 } } }
+        },
+        onClick(evt, els){
+          if (!els.length) return;
+          el("fTema").value = labels[els[0].index];
+          renderTable();
+          const t = document.getElementById("omTable"); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+    });
+  }
+
   function renderAll(){
     renderKPIs();
+    renderTemaChart();
     renderEquiposClave();
     renderStatusChart();
     renderGroupChart();
@@ -1127,7 +1274,7 @@
   });
 
   // ---------- Filter listeners ----------
-  ["fGrupo","fClase","fEstatus","fEquipo","fDesde","fHasta"].forEach(id => el(id).addEventListener("change", renderTable));
+  ["fGrupo","fClase","fEstatus","fEquipo","fTema","fDesde","fHasta"].forEach(id => el(id).addEventListener("change", renderTable));
   document.querySelectorAll("#eqTipo button").forEach(b => b.addEventListener("click", () => {
     document.querySelectorAll("#eqTipo button").forEach(x => x.classList.remove("on"));
     b.classList.add("on");
@@ -1137,7 +1284,7 @@
   el("eqPlanta").addEventListener("change", () => { if (records.length) renderEquiposClave(); });
   el("searchBox").addEventListener("input", renderTable);
   el("clearFilters").addEventListener("click", () => {
-    ["fGrupo","fClase","fEstatus","fEquipo"].forEach(id => el(id).value = "");
+    ["fGrupo","fClase","fEstatus","fEquipo","fTema"].forEach(id => el(id).value = "");
     el("fDesde").value = ""; el("fHasta").value = ""; el("searchBox").value = "";
     renderTable();
   });
