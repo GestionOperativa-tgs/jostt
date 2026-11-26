@@ -431,8 +431,8 @@
   </section>
 
   <section class="panel">
-    <h2>OM por grupo</h2>
-    <p class="panel-sub">Carga de trabajo por sistema / planta</p>
+    <h2>OM por sector</h2>
+    <p class="panel-sub">Sector responsable según la ubicación técnica: OCTY = Planta Tratayén · CCSA = Planta Salliqueló · TERC = Gasoducto GPM</p>
     <div class="chart-box tall"><canvas id="groupChart"></canvas></div>
   </section>
 
@@ -488,7 +488,7 @@
 
     <div class="filters">
       <div class="field-group">
-        <label for="fGrupo">Grupo</label>
+        <label for="fGrupo">Sector</label>
         <select id="fGrupo"><option value="">Todos</option></select>
       </div>
       <div class="field-group">
@@ -527,7 +527,7 @@
       <table id="omTable">
         <thead>
           <tr>
-            <th data-key="Grupo">Grupo<span class="arrow"></span></th>
+            <th data-key="Grupo">Sector<span class="arrow"></span></th>
             <th data-key="N° OM">N° OM<span class="arrow"></span></th>
             <th data-key="Clase OM">Clase<span class="arrow"></span></th>
             <th data-key="Ubicación Técnica">Ubicación Técnica<span class="arrow"></span></th>
@@ -572,6 +572,17 @@
   //  tipo: TC = Turbocompresor · MG = Motogenerador
   //        EC = Electrocompresor · SA = Secadora de aire
   // =====================================================================
+  /* SECTORES — responsable de la OM según la ubicación técnica (no el grupo de planificación SAP).
+     GNK y GPM son el mismo gasoducto: GNK son planes más antiguos y GPM planes más nuevos. */
+  const SECTORES = [
+    { prefijo: "OCTY", nombre: "Planta Tratayén" },
+    { prefijo: "CCSA", nombre: "Planta Salliqueló" },
+    { prefijo: "TERC", nombre: "Gasoducto GPM" }
+  ];
+  const SECTOR_OTRO = "Otra ubicación";
+  const SECTOR_ORDEN = SECTORES.map(x => x.nombre).concat(SECTOR_OTRO);
+  function sectorDe(ut){ const u = String(ut || "").trim().toUpperCase(); const x = SECTORES.find(z => u.startsWith(z.prefijo)); return x ? x.nombre : SECTOR_OTRO; }
+
   const PLANES_SEGUIMIENTO = {
     // ---- PC Tratayén ----
     "30988": { tipo: "TC", equipo: "TC1",    planta: "PC Tratayén" },
@@ -840,7 +851,8 @@
     const fi = parseDate(row["Fecha Inicio"]);
     const ff = parseDate(row["Fecha Fin"]);
     return {
-      grupo: row["Grupo"] ?? "",
+      grupo: sectorDe(row["Ubicación Técnica"]),
+      grupoPl: row["Grupo"] ?? "",
       nOM: row["N° OM"] ?? "",
       claseOM: row["Clase OM"] ?? "",
       ubicacion: row["Ubicación Técnica"] ?? "",
@@ -905,7 +917,7 @@
   }
 
   function populateFilterOptions(){
-    const grupos = uniqueSorted(records.map(r => r.grupo));
+    const grupos = SECTOR_ORDEN.filter(g => records.some(r => r.grupo === g));
     const clases = uniqueSorted(records.map(r => r.claseOM));
     const estatuses = uniqueSorted(records.flatMap(r => statusTokens(r.estatus)));
     fillSelect(el("fGrupo"), grupos, "Todos");
@@ -1009,8 +1021,8 @@
 
   function renderGroupChart(){
     const counts = {};
-    records.forEach(r => { const g = r.grupo || "(sin grupo)"; counts[g] = (counts[g]||0)+1; });
-    const labels = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+    records.forEach(r => { const g = r.grupo || SECTOR_OTRO; counts[g] = (counts[g]||0)+1; });
+    const labels = SECTOR_ORDEN.filter(l => counts[l]);
     const data = labels.map(l => counts[l]);
 
     if (groupChartInst) groupChartInst.destroy();
@@ -1138,7 +1150,7 @@
         return `<span class="badge ${cls}" title="SAP: ${escapeAttr(r.estatusSAP)}">${escapeHtml(t)}</span>`;
       }).join(" ") + (r.estatusSAP && r.estatusSAP !== r.estatus ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;font-family:'IBM Plex Mono',monospace">${escapeHtml(r.estatusSAP)}</div>` : "");
       return `<tr>
-        <td>${escapeHtml(r.grupo)}</td>
+        <td title="Grupo de planificación SAP: ${escapeAttr(r.grupoPl || "—")}">${escapeHtml(r.grupo)}</td>
         <td class="col-om">${escapeHtml(r.nOM)}</td>
         <td>${escapeHtml(r.claseOM)}</td>
         <td>${escapeHtml(r.ubicacion)}</td>
