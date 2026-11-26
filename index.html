@@ -755,6 +755,138 @@
   ]);
   let anuladas = 0;
   let excluidas = 0;   // OM con NEJE / BLOQ que no se muestran
+  let fueraRelev = 0;  // OM quitadas por el relevamiento de planes
+
+  // =====================================================================
+  //  RELEVAMIENTO DE PLANES (nov-2026, "Observaciones de Planes")
+  //  Es la misma lista que usa el tablero de cumplimiento (cumplimiento-gpm), para que ambos coincidan.
+  //  Prevalece sobre la bajada de SAP, solo en el año RELEV_ANIO.
+  //   - eliminar / 2027 : las OM del plan no se muestran (plan inactivo o con error / frecuencia a acomodar en 2027).
+  //   - realizado       : la OM se muestra CERRADA aunque esté NEJE o en la lista de anuladas; si falta, se agrega.
+  //   - pendiente       : la OM se muestra PENDIENTE con inicio en diciembre; si falta, se agrega.
+  //   - revisar         : sin cambios (acción en SAP).
+  //  Con N° de OM el ajuste es por equipo: las otras OM del mismo plan y ubicación técnica se quitan.
+  //  Sin N° de OM el ajuste es por plan: sus OM no cerradas del año pasan a la acción.
+  // =====================================================================
+  const RELEV_ANIO = 2026;
+  const RELEVAMIENTO = [
+    { plan: "31095", ut: "TERC-NKTS", om: "", accion: "eliminar", fecha: "", nota: "No lanzado · Eliminar del tablero" },
+    { plan: "31103", ut: "TERC-NKTS", om: "", accion: "eliminar", fecha: "", nota: "No lanzado · Eliminar del tablero" },
+    { plan: "31502", ut: "CCSA", om: "", accion: "revisar", fecha: "", nota: "No lanzado · Dar de alta equipo en SAP y lanzar plan" },
+    { plan: "31688", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "31692", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "31694", ut: "TERC-NKTS", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32069", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32070", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32071", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32074", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32076", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32077", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32080", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32082", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32084", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32085", ut: "CCSA", om: "", accion: "pendiente", fecha: "", nota: "No realizado 2025 + NEJE · Pendiente" },
+    { plan: "32086", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32088", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32089", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32092", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "32094", ut: "CCSA", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "29927", ut: "TERC-NKTS-AB-VALVUL-XNV12001", om: "101205958", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29927", ut: "TERC-NKTS-AB-VALVUL-XNV301", om: "101205960", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29927", ut: "TERC-NKTS-AB-VALVUL-XNV302", om: "101205962", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29927", ut: "TERC-NKTS-AB-VALVUL-XNV303", om: "101205964", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29927", ut: "TERC-NKTS-AB-VALVUL-XNV305", om: "101205966", accion: "realizado", fecha: "2026-10-15", nota: "Realizado 15/10/2026" },
+    { plan: "29927", ut: "TERC-NKTS-AB-VALVUL-XNV304", om: "101205968", accion: "realizado", fecha: "2026-10-13", nota: "Realizado 13/10/2026" },
+    { plan: "29928", ut: "TERC-NKTS-BC-VALVUL-XNV22001", om: "101205990", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29928", ut: "TERC-NKTS-BC-VALVUL-XNV306", om: "101205991", accion: "realizado", fecha: "2026-10-16", nota: "Realizado 16/10/2026" },
+    { plan: "29928", ut: "TERC-NKTS-BC-VALVUL-XNV307", om: "101205992", accion: "realizado", fecha: "2026-10-16", nota: "Realizado 16/10/2026" },
+    { plan: "29928", ut: "TERC-NKTS-BC-VALVUL-XNV308", om: "101205993", accion: "realizado", fecha: "2026-10-16", nota: "Realizado 16/10/2026" },
+    { plan: "29928", ut: "TERC-NKTS-BC-VALVUL-XNV309", om: "101205994", accion: "realizado", fecha: "2026-10-16", nota: "Realizado 16/10/2026" },
+    { plan: "29929", ut: "TERC-NKTS-CD-VALVUL-XNV310", om: "101206036", accion: "realizado", fecha: "2026-09-10", nota: "Realizado 10/09/2026" },
+    { plan: "29929", ut: "TERC-NKTS-CD-VALVUL-XNV311", om: "101206038", accion: "realizado", fecha: "2026-09-15", nota: "Realizado 15/09/2026" },
+    { plan: "29929", ut: "TERC-NKTS-CD-VALVUL-XNV312", om: "101206040", accion: "realizado", fecha: "2026-09-15", nota: "Realizado 15/09/2026" },
+    { plan: "29929", ut: "TERC-NKTS-CD-VALVUL-XNV313", om: "101206042", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29929", ut: "TERC-NKTS-CD-VALVUL-XNV32001", om: "101206044", accion: "realizado", fecha: "2026-10-14", nota: "Realizado 14/10/2026" },
+    { plan: "29930", ut: "TERC-NKTS-DE-VALVUL-XNV314", om: "101206106", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29930", ut: "TERC-NKTS-DE-VALVUL-XNV315", om: "101206108", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29930", ut: "TERC-NKTS-DE-VALVUL-XNV316", om: "101206110", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29930", ut: "TERC-NKTS-DE-VALVUL-XNV317", om: "101206112", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29930", ut: "TERC-NKTS-DE-VALVUL-XNV42001", om: "101206114", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29930", ut: "TERC-NKTS-DE-VALVUL-XNV52001", om: "101206116", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "31511", ut: "CCSA-12000", om: "", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "31512", ut: "CCSA-02000", om: "", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "31513", ut: "CCSA-05000", om: "", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "31514", ut: "CCSA-06000", om: "", accion: "pendiente", fecha: "", nota: "Pendiente" },
+    { plan: "29678", ut: "TERC-NKTS-DE-PM1004-TE-4011", om: "101067878", accion: "realizado", fecha: "2025-05-07", nota: "Realizado 07/05/2025" },
+    { plan: "29681", ut: "TERC-NKTS-DE-PM1004-UM-4011", om: "101066651", accion: "realizado", fecha: "2025-05-07", nota: "Realizado 07/05/2025" },
+    { plan: "31510", ut: "CCSA", om: "", accion: "pendiente", fecha: "2025-12-04", nota: "Realizado 04/12/2025 · Pendiente Diciembre 2026" },
+    { plan: "31247", ut: "OCTY", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "31496", ut: "CCSA", om: "101106074", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "31518", ut: "CCSA", om: "101106082", accion: "pendiente", fecha: "", nota: "OM 2026 NEJE · Pendiente" },
+    { plan: "29896", ut: "TERC-NKTS-AB", om: "", accion: "eliminar", fecha: "", nota: "Plan Bloqueado · Eliminar del tablero" },
+    { plan: "29897", ut: "TERC-NKTS-BC", om: "", accion: "eliminar", fecha: "", nota: "Plan Bloqueado · Eliminar del tablero" },
+    { plan: "29898", ut: "TERC-NKTS-CD", om: "", accion: "eliminar", fecha: "", nota: "Plan Bloqueado · Eliminar del tablero" },
+    { plan: "29899", ut: "TERC-NKTS-DE", om: "", accion: "eliminar", fecha: "", nota: "Plan Bloqueado · Eliminar del tablero" },
+    { plan: "31394", ut: "TERC-NKTS-AB-ME-PM1001", om: "", accion: "eliminar", fecha: "", nota: "Plan Bloqueado · Eliminar del tablero" },
+    { plan: "31395", ut: "TERC-NKTS-AB-ME-PM1002", om: "", accion: "pendiente", fecha: "", nota: "Pendiente · Traer a Diciembre 2026?" },
+    { plan: "31343", ut: "OCTY", om: "", accion: "pendiente", fecha: "", nota: "Pendiente · Traer a Diciembre 2026?" },
+    { plan: "30180", ut: "TERC-NKTS", om: "", accion: "2027", fecha: "", nota: "OM 2025 cumplida en 2026 · Acomodar la frecuencia para 2027" },
+    { plan: "31090", ut: "TERC-NKTS-DE-ME-PM1003", om: "", accion: "eliminar", fecha: "", nota: "No lanzado · Eliminar del tablero" },
+    { plan: "31098", ut: "TERC-NKTS-DE-ME-PM1004", om: "", accion: "eliminar", fecha: "", nota: "No lanzado · Eliminar del tablero" },
+    { plan: "31442", ut: "TERC-NKTS-DE-ME-PM1003", om: "101209105", accion: "pendiente", fecha: "", nota: "OM 2025 Abierta · Pendiente" },
+    { plan: "31396", ut: "TERC-NKTS-AB-ME-PM1001-6000", om: "", accion: "eliminar", fecha: "", nota: "Plan Bloqueado · Eliminar del tablero" },
+    { plan: "31397", ut: "TERC-NKTS-AB-ME-PM1002-6000", om: "", accion: "eliminar", fecha: "", nota: "Plan Bloqueado · Eliminar del tablero" },
+    { plan: "31418", ut: "TERC-NKTS-DE-ME-PM1003", om: "", accion: "eliminar", fecha: "", nota: "No lanzado · Eliminar del tablero" },
+    { plan: "31420", ut: "TERC-NKTS-DE-ME-PM1004", om: "", accion: "eliminar", fecha: "", nota: "No lanzado · Eliminar del tablero" },
+    { plan: "31524", ut: "CCSA-04000", om: "", accion: "eliminar", fecha: "", nota: "No lanzado · Eliminar del tablero" }
+  
+  ];
+  const RELEV_TAG = "Relevamiento nov-2026";
+
+  function aplicarRelevamiento(todas){
+    const A = new Date().getFullYear();
+    if (A !== RELEV_ANIO) return todas;
+    const nut = (u) => String(u || "").trim().toUpperCase();
+    const fuera = new Set(RELEVAMIENTO.filter(x => x.accion === "eliminar" || x.accion === "2027").map(x => x.plan));
+    const porOM = new Map(RELEVAMIENTO.filter(x => x.om && (x.accion === "realizado" || x.accion === "pendiente")).map(x => [x.om, x]));
+    const porPlan = new Map(RELEVAMIENTO.filter(x => !x.om && (x.accion === "realizado" || x.accion === "pendiente")).map(x => [x.plan, x]));
+    const ajustar = (r, x) => {
+      r.relev = x.nota;
+      r.comentario = [r.comentario, RELEV_TAG + ": " + x.nota].filter(Boolean).join(" · ");
+      if (x.accion === "realizado"){
+        r.estatus = "CERRADA";
+        if (x.fecha){ const [y, m, d] = x.fecha.split("-").map(Number); r.fechaFin = new Date(y, m - 1, d); if (!r.fechaInicio) r.fechaInicio = r.fechaFin; }
+      } else {
+        r.estatus = "PENDIENTE"; r.fechaInicio = new Date(A, 11, 1); r.fechaFin = new Date(A, 11, 31);
+      }
+    };
+    const out = [], hallada = new Set();
+    let quitadas = 0;
+    todas.forEach(r => {
+      const plan = planKey(r.nPlan), om = planKey(r.nOM);
+      if (fuera.has(plan)){ quitadas++; return; }
+      const x = porOM.get(om);
+      if (x){ ajustar(r, x); hallada.add(om); out.push(r); return; }
+      const y = porOM.size ? [...porOM.values()].find(z => z.plan === plan && z.ut && nut(z.ut) === nut(r.ubicacion)) : null;
+      if (y){ r._reemplazada = true; quitadas++; return; }                 // otra OM del mismo equipo: manda la del relevamiento
+      const pp = porPlan.get(plan);
+      const anio = r.fechaInicio ? r.fechaInicio.getFullYear() : A;
+      if (pp && r.estatus !== "CERRADA" && (anio === A || (anio === A - 1 && r.estatus !== "EXCLUIR"))){ ajustar(r, pp); }
+      out.push(r);
+    });
+    const nueva = (x) => {
+      const r = normalizeRow({ "N° OM": x.om || "s/OM", "Ubicación Técnica": x.ut, "Descripción": "Plan " + x.plan + " · OM no incluida en la bajada (agregada por relevamiento)", "Estatus": "", "N° Plan": x.plan });
+      r.estatusSAP = RELEV_TAG; ajustar(r, x); out.push(r);
+    };
+    porOM.forEach((x, om) => { if (!hallada.has(om)) nueva(x); });
+    porPlan.forEach(x => {
+      const tiene = out.some(r => planKey(r.nPlan) === x.plan && r.relev && (x.accion === "pendiente" ? r.estatus === "PENDIENTE" : r.estatus === "CERRADA"));
+      const cerrada = out.some(r => planKey(r.nPlan) === x.plan && r.estatus === "CERRADA");
+      if (!tiene && !(x.accion === "realizado" && cerrada)) nueva(x);
+    });
+    fueraRelev = quitadas;
+    return out;
+  }
 
   // ---------- Temas por N° de Plan ----------
   //  La pestaña Planes (ex "Planes Act") se lee con la Web App del tablero de cumplimiento,
@@ -829,8 +961,8 @@
 
       rawRows = data;
       await cargarTemas();
-      const todas = data.map(normalizeRow);
-      const vivas = todas.filter(r => !OM_ANULADAS.has(planKey(r.nOM)));
+      const todas = aplicarRelevamiento(data.map(normalizeRow));
+      const vivas = todas.filter(r => r.relev || !OM_ANULADAS.has(planKey(r.nOM)));
       anuladas = todas.length - vivas.length;
       records = vivas.filter(r => r.estatus !== "EXCLUIR");
       excluidas = vivas.length - records.length;
@@ -839,7 +971,7 @@
       renderAll();
 
       const now = new Date();
-      setStatus("live", "Conectado — última actualización " + now.toLocaleTimeString("es-AR") + " · " + records.length + " OM cargadas" + (excluidas ? " · " + excluidas + " excluidas (NEJE/BLOQ)" : "") + (anuladas ? " · " + anuladas + " anuladas (generadas de más)" : ""));
+      setStatus("live", "Conectado — última actualización " + now.toLocaleTimeString("es-AR") + " · " + records.length + " OM cargadas" + (excluidas ? " · " + excluidas + " excluidas (NEJE/BLOQ)" : "") + (anuladas ? " · " + anuladas + " anuladas (generadas de más)" : "") + (fueraRelev ? " · " + fueraRelev + " fuera por el relevamiento de planes" : ""));
       saveConfig();
     }catch(err){
       console.error(err);
@@ -1154,7 +1286,7 @@
       const chips = tokens.map(t => {
         const cls = t === "CERRADA" ? "badge-success" : (vencida || t === "REPROGRAMADA") ? "badge-danger" : "badge-neutral";
         return `<span class="badge ${cls}" title="SAP: ${escapeAttr(r.estatusSAP)}">${escapeHtml(t)}</span>`;
-      }).join(" ") + (r.estatusSAP && r.estatusSAP !== r.estatus ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;font-family:'IBM Plex Mono',monospace">${escapeHtml(r.estatusSAP)}</div>` : "");
+      }).join(" ") + (r.estatusSAP && r.estatusSAP !== r.estatus ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:2px;font-family:'IBM Plex Mono',monospace">${escapeHtml(r.estatusSAP)}</div>` : "") + (r.relev ? `<div style="font-size:10.5px;color:var(--accent,#0B4F9E);margin-top:2px" title="${escapeAttr(RELEV_TAG + ": " + r.relev)}">relevamiento</div>` : "");
       return `<tr>
         <td title="Grupo de planificación SAP: ${escapeAttr(r.grupoPl || "—")}">${escapeHtml(r.grupo)}</td>
         <td class="col-om">${escapeHtml(r.nOM)}</td>
