@@ -476,7 +476,7 @@
 
   <section class="panel">
     <h2>Alertas</h2>
-    <p class="panel-sub">Vencidas, próximas a vencer (≤15 días) y con datos incompletos</p>
+    <p class="panel-sub">Vencidas (programadas en meses anteriores), pendientes de cierre del mes en curso, próximas a vencer (≤15 días) y con datos incompletos</p>
     <div class="alert-list" id="alertList">
       <p class="alert-empty">Conectá la hoja para ver alertas.</p>
     </div>
@@ -667,6 +667,10 @@
   }
   function daysBetween(a,b){ return Math.round((b - a) / 86400000); }
   function startOfToday(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+  // Margen de cierre: una OM del mes en curso no se considera vencida aunque su fecha ya haya pasado
+  // (el equipo de mantenimiento suele cerrar las OM cerca de fin de mes). Vence desde el 1° del mes siguiente.
+  function startOfMonth(){ const d = startOfToday(); d.setDate(1); return d; }
+  function esVencida(r){ return !!r.fechaFin && r.fechaFin < startOfMonth() && !isClosed(r.estatus); }
 
   // ---------- Status token helpers ----------
   function statusTokens(estatusRaw){
@@ -1072,8 +1076,10 @@
     const items = [];
 
     records.forEach(r => {
-      if (r.fechaFin && r.fechaFin < today && !isClosed(r.estatus)){
+      if (esVencida(r)){
         items.push({ badge:"danger", label:"Vencida", r, note: fmtDate(r.fechaFin) + " (hace " + Math.abs(daysBetween(r.fechaFin, today)) + " días)" });
+      } else if (r.fechaFin && r.fechaFin < today && !isClosed(r.estatus)){
+        items.push({ badge:"warning", label:"Pendiente de cierre", r, note: fmtDate(r.fechaFin) + " · mes en curso, sin cerrar" });
       } else if (r.fechaFin && !isClosed(r.estatus)){
         const d = daysBetween(today, r.fechaFin);
         if (d >= 0 && d <= 15){
@@ -1143,7 +1149,7 @@
 
     const today = startOfToday();
     tbody.innerHTML = list.map(r => {
-      const vencida = r.fechaFin && r.fechaFin < today && !isClosed(r.estatus);
+      const vencida = esVencida(r);
       const tokens = statusTokens(r.estatus);
       const chips = tokens.map(t => {
         const cls = t === "CERRADA" ? "badge-success" : (vencida || t === "REPROGRAMADA") ? "badge-danger" : "badge-neutral";
@@ -1189,7 +1195,7 @@
     });
 
     const cerradas = list.filter(r => isClosed(r.estatus)).length;
-    const vencidas = list.filter(r => !isClosed(r.estatus) && r.fechaFin && r.fechaFin < today).length;
+    const vencidas = list.filter(esVencida).length;
     el("eqTotal").textContent = list.length;
     el("eqCerradas").textContent = cerradas;
     el("eqAbiertas").textContent = list.length - cerradas;
